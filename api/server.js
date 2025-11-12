@@ -7,9 +7,14 @@ const fs = require('fs');
 // Load environment variables
 dotenv.config();
 
-// Create uploads directory if it doesn't exist
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
+// ✅ Skip creating the uploads folder on Vercel (read-only filesystem)
+if (!process.env.VERCEL) {
+  if (!fs.existsSync('uploads')) {
+    fs.mkdirSync('uploads', { recursive: true });
+    console.log("📁 'uploads' directory created.");
+  }
+} else {
+  console.log("⚠️ Skipping 'uploads' directory creation — running on Vercel (read-only file system).");
 }
 
 // Initialize express
@@ -23,18 +28,27 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ✅ Conditional route loading (skip file routes on Vercel if they handle uploads)
+if (!process.env.VERCEL) {
+  app.use('/api/files', require('../routes/files'));
+} else {
+  app.use('/api/files', (req, res) => {
+    res.status(403).json({ error: 'File uploads are disabled on Vercel.' });
+  });
+}
+
 // Routes
 app.use('/api/auth', require('../routes/auth'));
-app.use('/api/files', require('../routes/files'));
 
 // Health check route
 app.get('/', (req, res) => {
   res.json({ 
     message: 'StudyGeni API is running',
     version: '1.0.0',
+    environment: process.env.VERCEL ? 'vercel' : (process.env.NODE_ENV || 'development'),
     endpoints: {
       auth: '/api/auth',
-      files: '/api/files'
+      files: process.env.VERCEL ? 'disabled on Vercel' : '/api/files'
     }
   });
 });
